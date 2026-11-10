@@ -22,6 +22,9 @@ tio_mlp/
   experiments.py        # zestawy eksperymentów, agregacja, raport
   reporting.py          # CSV, JSON, wykresy i raport Markdown
   utils.py              # ziarna, urządzenie, zapis JSON
+scripts/
+  download_data.sh      # pobieranie MNIST na Linux/macOS
+  download_data.ps1     # pobieranie MNIST w PowerShell
 tests/                  # szybkie testy jednostkowe metryk, modelu i konfiguracji
 ```
 
@@ -42,6 +45,33 @@ pip install -r requirements.txt
 
 MNIST (ok. 11 MB) jest pobierany automatycznie do `data/` przy pierwszym
 uruchomieniu.
+
+## Pobieranie danych bez Pythona
+
+Katalog `data/` jest w `.gitignore`, więc po sklonowaniu repo dane trzeba pobrać
+osobno. Program robi to automatycznie, ale do przygotowania danych przed
+instalacją Pythona (albo do pracy offline) służą proste skrypty:
+
+```bash
+# Linux / macOS
+./scripts/download_data.sh
+
+# Windows PowerShell
+powershell -ExecutionPolicy Bypass -File .\scripts\download_data.ps1
+```
+
+Można też wskazać inny katalog:
+
+```bash
+./scripts/download_data.sh /tmp/mnist
+powershell -ExecutionPolicy Bypass -File .\scripts\download_data.ps1 -DataDir C:\mnist
+```
+
+Skrypty pobierają oryginalne pliki IDX z mirrorów PyTorch, weryfikują sumy MD5
+i rozpakowują je do `<katalog>/MNIST/raw` — dokładnie tam, gdzie szuka ich
+`torchvision`. Są idempotentne: przy ponownym uruchomieniu sprawdzają istniejące
+pliki zamiast pobierać je od nowa. Wymagania: `curl` lub `wget` oraz `gzip`
+(Linux/macOS); PowerShell korzysta z wbudowanych mechanizmów systemu.
 
 ### Pochodzenie danych
 
