@@ -88,7 +88,10 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         help="ziarno podziału train/val; stałe w eksperymentach",
     )
     training.add_argument(
-        "--device", choices=("auto", "cpu", "cuda", "mps"), default=Config.device
+        "--device",
+        default=Config.device,
+        metavar="URZADZENIE",
+        help="auto (domyślnie), cpu, cuda, cuda:N lub mps",
     )
     training.add_argument("--output-dir", default=Config.output_dir)
     training.add_argument("--quiet", action="store_true", help="bez pasków postępu i logów")

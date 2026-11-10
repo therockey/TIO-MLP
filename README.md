@@ -86,6 +86,67 @@ kolumny `label` + 784 pikseli (0–255), a `pixel0 … pixel783` odpowiada
 pozostaje nietknięte. Normalizacja jest już preprocessingiem w `data.py`, a nie
 częścią plików źródłowych.
 
+## CUDA (opcjonalnie)
+
+Domyślnie `--device auto` wybiera GPU, jeśli `torch.cuda.is_available()` zwraca
+`True`. Najpierw sprawdź, czy masz wersję CUDA PyTorch:
+
+```bash
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+Jeśli wersja kończy się na `+cpu` (albo `cuda_available` to `False`), po
+restarcie systemu doinstaluj wersję CUDA:
+
+```bash
+nvidia-smi   # sprawdź sterownik i „CUDA Version”
+source .venv/bin/activate
+pip uninstall -y torch torchvision
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
+```
+
+Indeks `cu130` wybierz zgodnie z „CUDA Version” z `nvidia-smi`: dla CUDA 13.x
+użyj `cu130`, a dla 12.x zwykle `cu126`. Aktualne mapowanie wersji znajdziesz na
+https://pytorch.org/get-started/locally/. Po instalacji sprawdź:
+
+```bash
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+Powinno pojawić się np. `2.14.1+cu130 True`. Uruchomienie na GPU:
+
+```bash
+python run.py train --device cuda --batch-size 256 --num-workers 4
+python run.py experiment --suite architecture --repeats 3 --device cuda \
+    --batch-size 256 --num-workers 4
+```
+
+Możesz też pominąć `--device cuda` — `auto` sam wybierze GPU. Obsługiwane są
+także `--device cuda:0`, `cuda:1`, … do wyboru konkretnej karty; alternatywnie
+`CUDA_VISIBLE_DEVICES=1 python run.py ...`.
+
+Większy `--batch-size` (256/512) i `--num-workers 4` lepiej wykorzystują kartę;
+przy porównaniach eksperymentów pamiętaj, aby wszystkie warianty miały ten sam
+batch size. Na małym MLP wąskim gardłem bywa ładowanie danych, a nie sama karta.
+Na RTX 3050 Laptop (batch 256, 4 workery) epoka trwała około **3,2–3,4 s**
+w porównaniu do około **6 s** na CPU z 6 rdzeniami; pierwsza epoka jest wolniejsza
+z powodu inicjalizacji CUDA.
+
+### Rozwiązywanie problemów
+
+- **`torch.cuda.is_available() == False`** — zainstalowana jest wersja CPU.
+  Sprawdź `python -c "import torch; print(torch.__version__)"`; jeśli kończy się
+  na `+cpu`, przeinstaluj PyTorch z indeksu CUDA.
+- **`PicklingError: Can't pickle local object`** przy `--num-workers > 0` —
+  dotyczyło Pythona 3.14, gdzie domyślnym start method jest `forkserver`.
+  Funkcja ziarna jest teraz modułowa (`tio_mlp.data.seed_worker`), więc problem
+  jest rozwiązany. Jeśli pojawi się w starszej kopii kodu, użyj
+  `--num-workers 0` albo zaktualizuj repozytorium.
+- **`CUDA out of memory`** — zmniejsz `--batch-size` (np. do 128).
+- **Wolniejsze uczenie na GPU niż na CPU** — przy tak małej sieci narzut
+  kopiowania danych może przewyższyć zysk; zwiększ `--batch-size` i
+  `--num-workers`, a jeśli to nie pomaga, zostań na CPU.
+
 ## Szybki start
 
 ```bash
@@ -205,9 +266,12 @@ samodzielnie, bez gotowych modeli ani pipeline'ów wysokiego poziomu.
 
 - `--seed` kontroluje inicjalizację wag i kolejność danych,
 - `--split-seed` kontroluje podział danych,
-- `--device auto|cpu|cuda|mps` wybiera urządzenie,
+- `--device auto|cpu|cuda|cuda:N|mps` wybiera urządzenie,
 - na CPU z 6 rdzeniami jedna epoka dla `256-128` trwa zwykle kilka–kilkanaście
-  sekund; pełny zestaw `all` z 3 powtórzeniami może zająć godzinę lub więcej.
+  sekund; pełny zestaw `all` z 3 powtórzeniami może zająć godzinę lub więcej,
+- `--num-workers` uruchamia procesy robocze DataLoadera. Od Pythona 3.14
+  domyślnym start method jest `forkserver`, dlatego funkcja inicjalizująca
+  ziarno jest modułowa i przekazywana przez `functools.partial`.
 
 ## Testy
 

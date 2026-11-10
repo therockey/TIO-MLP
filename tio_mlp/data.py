@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import random
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -144,14 +145,17 @@ def _build_transform(mean: list[float], std: list[float], augment: str, train: b
     return transforms.Compose(operations)
 
 
-def _worker_init(seed: int):
-    def initializer(worker_id: int) -> None:
-        worker_seed = seed + worker_id
-        np.random.seed(worker_seed)
-        random.seed(worker_seed)
-        torch.manual_seed(worker_seed)
+def seed_worker(worker_id: int, base_seed: int) -> None:
+    """Ziarno dla procesu roboczego DataLoadera.
 
-    return initializer
+    Funkcja jest modułowa (a nie domknięciem), ponieważ od Pythona 3.14
+    domyślnym start method na Linuksie jest ``forkserver``, który wymaga
+    picklowalnych argumentów procesu — lokalne domknięcia nie przechodzą.
+    """
+    worker_seed = base_seed + worker_id
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
 
 
 def build_dataloaders(cfg: Config) -> DataBundle:
@@ -213,12 +217,13 @@ def build_dataloaders(cfg: Config) -> DataBundle:
 
     generator = torch.Generator()
     generator.manual_seed(cfg.seed)
-    pin_memory = cfg.device in ("cuda", "auto") and torch.cuda.is_available()
+    wants_cuda = cfg.device == "auto" or cfg.device.startswith("cuda")
+    pin_memory = wants_cuda and torch.cuda.is_available()
     common = {
         "batch_size": cfg.batch_size,
         "num_workers": cfg.num_workers,
         "pin_memory": pin_memory,
-        "worker_init_fn": _worker_init(cfg.seed),
+        "worker_init_fn": partial(seed_worker, base_seed=cfg.seed),
     }
     if cfg.num_workers > 0:
         common["persistent_workers"] = True

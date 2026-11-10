@@ -24,20 +24,46 @@ def set_seed(seed: int) -> None:
 
 
 def resolve_device(device: str) -> torch.device:
-    """Zamienia ``auto``/``cpu``/``cuda``/``mps`` na obiekt ``torch.device``."""
+    """Zamienia ``auto``/``cpu``/``cuda``/``cuda:N``/``mps`` na ``torch.device``."""
+    device = device.strip().lower()
     if device == "auto":
         if torch.cuda.is_available():
             return torch.device("cuda")
         if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
             return torch.device("mps")
         return torch.device("cpu")
-    if device == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("Wybrano --device cuda, ale CUDA nie jest dostępna.")
-    if device == "mps" and not (
-        getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available()
-    ):
-        raise RuntimeError("Wybrano --device mps, ale MPS nie jest dostępny.")
-    return torch.device(device)
+
+    if device.startswith("cuda"):
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "Wybrano --device cuda, ale CUDA nie jest dostępna. "
+                "Sprawdź, czy zainstalowano wersję PyTorch z CUDA: "
+                "python -c \"import torch; print(torch.__version__, torch.cuda.is_available())\""
+            )
+        try:
+            resolved = torch.device(device)
+        except (RuntimeError, ValueError) as error:
+            raise RuntimeError(f"Niepoprawna nazwa urządzenia: {device!r}") from error
+        if resolved.index is not None and resolved.index >= torch.cuda.device_count():
+            raise RuntimeError(
+                f"Wybrano {device}, ale dostępne są tylko "
+                f"{torch.cuda.device_count()} urządzenia CUDA."
+            )
+        return resolved
+
+    if device == "mps":
+        if not (
+            getattr(torch.backends, "mps", None) is not None
+            and torch.backends.mps.is_available()
+        ):
+            raise RuntimeError("Wybrano --device mps, ale MPS nie jest dostępny.")
+        return torch.device("mps")
+
+    if device != "cpu":
+        raise RuntimeError(
+            f"Nieznane urządzenie: {device!r}. Użyj auto, cpu, cuda, cuda:N lub mps."
+        )
+    return torch.device("cpu")
 
 
 def timestamp() -> str:
